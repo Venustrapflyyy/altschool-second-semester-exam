@@ -1,0 +1,211 @@
+---
+  - name: deploy laravel with apache on host server
+    hosts: 138.68.157.63
+    become: true # perform all ansible tasks as another user
+    become_user: root # default username to be used by ansible
+
+    tasks:
+      - name: update local software package database
+        ansible.builtin.apt:
+          update_cache: yes
+
+      - name: install Apache web server
+        ansible.builtin.apt:
+          name: apache2
+          state: latest
+
+      - name: Install python
+        apt:
+          pkg: python3-pip
+          state: latest
+
+      - name: Install pymysql
+        apt:
+          name: python3-mysqldb
+          state: latest
+
+      - name: Installing Mysql and dependencies
+        package:
+          name: ['build-essential', 'mysql-server', 'mysql-client', 'libmysqlclient-dev']
+                    state: latest
+          update_cache: yes
+
+      - name: start and enable mysql service
+        service:
+          name: mysql
+          state: started
+          enabled: yes
+
+      - name: Install Uncomplicated Firewall
+        apt: name=ufw state=latest
+
+      - name: Allow OpenSSH
+        ufw: name=OpenSSH rule=allow
+
+      - name: Allow access to tcp port 22 (SSH)
+        ufw: rule=allow port='22' proto=tcp
+
+      - name: Allow access to tcp port 80 (HTTP)
+        ufw: rule=allow port='80' proto=tcp
+
+      - name: Allow access to port 443 (HTTPS)
+        ufw: rule=allow port='443'
+
+      - name: Allow access to port 853 (DNS over TLS)
+        ufw: rule=allow port='853'
+        
+      - name: Allow access to port 3306 (MySQL Server)
+        ufw: rule=allow port='3306'
+
+      - name: Allow access to port 5432 (PostgreSQL Server)
+        ufw: rule=allow port='5432'
+
+      - name: Enable Uncomplicated Firewall
+        ufw: state=enabled policy=allow
+
+      - name: Install apache2-php
+        package: name=libapache2-mod-php state=latest
+
+      - name: Install php-cli
+        package: name=php-cli state=latest
+
+      - name: Install php-gd
+        package: name=php-gd state=latest
+
+      - name: Install php-curl
+        package: name=php-curl state=latest
+
+      - name: Install php-mysql
+        package: name=php-mysql state=latest
+
+      - name: Install php-pgsql
+        package: name=php-pgsql state=latest
+
+      - name: Install php-soap
+        package: name=php-soap state=latest
+
+      - name: Install php-common
+        package: name=php-common state=latest
+
+      - name: Install php-xml
+        package: name=php-xml state=latest
+
+      - name: Install php-gd
+        package: name=php-gd state=latest
+
+      - name: Install php-opcache
+        package: name=php-opcache state=latest
+
+      - name: Install php-mbstring
+        package: name=php-mbstring state=latest
+
+      - name: Install php-tokenizer
+        package: name=php-tokenizer state=latest
+
+      - name: Install php-json
+        package: name=php-json state=latest
+
+      - name: Install php-bcmath
+        package: name=php-bcmath state=latest
+
+      - name: install git
+        apt:
+        name: git
+        state: latest
+        update_cache: yes
+
+      - name: Validate Composer checksum
+        get_url:
+          checksum: "sha384:795f976fe0ebd8b75f26a6dd68f78fd3453ce79f32ecb33e7fd087d39bfeb978342fb73ac986cd4f54edd0dc902601dc"
+          dest: /root
+          url: https://getcomposer.org/installer
+          become: yes
+
+      - name: Download and install Composer
+        shell: curl -sS https://getcomposer.org/installer | php
+        args:
+          chdir: /root
+          creates: /usr/local/bin/composer
+          warn: false
+          become: yes
+
+      - name: copy downloaded binary to system directory
+        ansible.builtin.copy:
+          src: /root/composer.phar
+          dest: /usr/local/bin/composer
+          remote_src: yes
+
+      - name: clone laravel repository
+        ansible.builtin.git:
+          clone: true
+          repo: https://github.com/f1amy/laravel-realworld-example-app.git
+          dest: /var/www/html/laravel_app
+
+      - name: copy application config file from master to slave machine
+        copy:
+          src: /laravelapp.conf
+          dest: /etc/apache2/sites-available/laravelapp.conf
+          remote_src: yes
+
+      - name: enable apache rewrite module
+        shell: a2enmod rewrite
+
+      - name: activate the laravel virtual host
+        shell: a2ensite laravel.conf
+
+      - name: reload service
+        service:
+          name: apache2
+          state: reloaded
+
+      - name: give web group control of laravel directory
+        shell: chown -R :www-data /var/www/html/laravel
+
+      - name: give web group control of laravel directory
+        shell: chmod -R 775 /var/www/html/laravel
+
+      - name: give web group control of laravel directory
+        shell: chmod -R 775 /var/www/html/laravel/storage
+
+      - name: give web group control of laravel directory
+        shell: chown -R 775 /var/www/html/laravel/bootstrap/cache
+
+      - name: copy .env.example file to .env all from and to the managed node
+        ansible.builtin.copy:
+          src: /var/www/html/laravel_app/.env.example
+          dest: /var/www/html/laravel_app/.env
+          remote_src: yes
+
+      - name: create a database user
+        mysql_user:
+          login_user: zainab
+          login_password: zainab
+          name: zainab
+          password: zainab
+          host: localhost
+          priv: 'zainab.*:ALL, GRANT'
+
+      - name: create a database
+        mysql_db:
+          login_user: zainab
+          login_password: zainab
+          name: zainabdb
+          password: zainab
+          state: present
+
+      - name: reload service
+        service:
+          name: mysql
+          state: restarted
+
+      - name: cache configurations
+        shell: php artisan config:cache
+
+      - name: migrate the database
+        shell: php artisan migrate
+
+      - name: install certbot on slave machine
+        shell: apt-get install python3-certbot-apache -y
+
+      - name: encrypt SSL cert on laravel website
+        shell: certbot --apache -d zainabakinlawon.me
