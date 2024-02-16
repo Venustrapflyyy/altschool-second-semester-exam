@@ -1,0 +1,1 @@
+- This is an exam to test my ansible knowledge
